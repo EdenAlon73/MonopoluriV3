@@ -1,0 +1,48 @@
+{
+    "_meta": {
+        "models": {
+            "insightCard": "A proactive notification about financial status.",
+            "chatMessage": "A message in the advisor chat history."
+        }
+    },
+    "insights": [
+        {
+            "id": "ins_1",
+            "type": "Anomaly",
+            "title": "Unusual Spending Detected",
+            "message": "Your spending in 'Entertainment' is $450 this month, which is 200% higher than your 6-month average ($150).",
+            "trend": "negative",
+            "date": "Today, 9:41 AM"
+        },
+        {
+            "id": "ins_2",
+            "type": "Forecast",
+            "title": "Savings Goal On Track",
+            "message": "Based on your current savings rate, you are on track to hit your 'Home Down Payment' goal by November 2026.",
+            "trend": "positive",
+            "date": "Yesterday"
+        },
+        {
+            "id": "ins_3",
+            "type": "Suggestion",
+            "title": "Subscription Optimization",
+            "message": "You have 3 separate streaming services totaling $45/mo. Switching to a yearly plan for Netflix could save you $20/year.",
+            "trend": "neutral",
+            "date": "Oct 24"
+        }
+    ],
+    "chatHistory": [
+        {
+            "id": "msg_1",
+            "sender": "user",
+            "content": "How much did I spend on coffee last month?",
+            "timestamp": "10:05 AM"
+        },
+        {
+            "id": "msg_2",
+            "sender": "ai",
+            "content": "You spent **$240** on coffee in December. \n\nThis is **15% lower** than November ($282). You're doing great at cutting back!",
+            "timestamp": "10:05 AM"
+        }
+    ]
+}

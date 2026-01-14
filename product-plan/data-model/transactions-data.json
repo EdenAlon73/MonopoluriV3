@@ -1,0 +1,226 @@
+{
+  "_meta": {
+    "models": {
+      "users": "Represents either Eden or Sivan, each with their own profile and color identity for personalized tracking throughout the app.",
+      "categories": "Groups transactions into logical spending or income types such as groceries, salary, leisure, utilities, etc.",
+      "transactions": "An income or expense entry that includes amount, category, date, frequency (one-time or recurring), and owner assignment (Eden, Sivan, or Shared).",
+      "receipts": "Optional photo attachments for transactions to provide visual documentation of purchases or income sources."
+    },
+    "relationships": [
+      "Each Transaction belongs to a User (Eden or Sivan) or can be marked as Shared",
+      "Each Transaction belongs to a Category",
+      "Each Transaction may have one Receipt attached"
+    ]
+  },
+  "users": [
+    {
+      "id": "user-1",
+      "name": "Eden",
+      "color": "blue"
+    },
+    {
+      "id": "user-2",
+      "name": "Sivan",
+      "color": "amber"
+    }
+  ],
+  "categories": [
+    { "id": "cat-1", "name": "Salary", "type": "income" },
+    { "id": "cat-2", "name": "Freelance", "type": "income" },
+    { "id": "cat-3", "name": "Groceries", "type": "expense" },
+    { "id": "cat-4", "name": "Dining Out", "type": "expense" },
+    { "id": "cat-5", "name": "Rent", "type": "expense" },
+    { "id": "cat-6", "name": "Utilities", "type": "expense" },
+    { "id": "cat-7", "name": "Entertainment", "type": "expense" },
+    { "id": "cat-8", "name": "Transportation", "type": "expense" },
+    { "id": "cat-9", "name": "Healthcare", "type": "expense" },
+    { "id": "cat-10", "name": "Shopping", "type": "expense" }
+  ],
+  "transactions": [
+    {
+      "id": "txn-1",
+      "name": "Monthly Salary",
+      "amount": 4500,
+      "type": "income",
+      "categoryId": "cat-1",
+      "ownerId": "user-1",
+      "ownerType": "individual",
+      "date": "2026-01-01",
+      "frequency": "monthly",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-2",
+      "name": "Monthly Salary",
+      "amount": 4200,
+      "type": "income",
+      "categoryId": "cat-1",
+      "ownerId": "user-2",
+      "ownerType": "individual",
+      "date": "2026-01-01",
+      "frequency": "monthly",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-3",
+      "name": "Apartment Rent",
+      "amount": 1800,
+      "type": "expense",
+      "categoryId": "cat-5",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2026-01-05",
+      "frequency": "monthly",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-4",
+      "name": "Electricity Bill",
+      "amount": 95,
+      "type": "expense",
+      "categoryId": "cat-6",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2026-01-07",
+      "frequency": "monthly",
+      "hasReceipt": true,
+      "receiptUrl": "/receipts/electricity-jan-2026.jpg"
+    },
+    {
+      "id": "txn-5",
+      "name": "Weekly Groceries",
+      "amount": 142.50,
+      "type": "expense",
+      "categoryId": "cat-3",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2026-01-06",
+      "frequency": "weekly",
+      "hasReceipt": true,
+      "receiptUrl": "/receipts/groceries-2026-01-06.jpg"
+    },
+    {
+      "id": "txn-6",
+      "name": "Coffee Shop",
+      "amount": 8.50,
+      "type": "expense",
+      "categoryId": "cat-4",
+      "ownerId": "user-1",
+      "ownerType": "individual",
+      "date": "2026-01-06",
+      "frequency": "one-time",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-7",
+      "name": "Web Design Project",
+      "amount": 1200,
+      "type": "income",
+      "categoryId": "cat-2",
+      "ownerId": "user-1",
+      "ownerType": "individual",
+      "date": "2026-01-04",
+      "frequency": "one-time",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-8",
+      "name": "Movie Night",
+      "amount": 45,
+      "type": "expense",
+      "categoryId": "cat-7",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2026-01-05",
+      "frequency": "one-time",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-9",
+      "name": "Gym Membership",
+      "amount": 65,
+      "type": "expense",
+      "categoryId": "cat-7",
+      "ownerId": "user-2",
+      "ownerType": "individual",
+      "date": "2026-01-03",
+      "frequency": "monthly",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-10",
+      "name": "Gas Station",
+      "amount": 52,
+      "type": "expense",
+      "categoryId": "cat-8",
+      "ownerId": "user-1",
+      "ownerType": "individual",
+      "date": "2026-01-02",
+      "frequency": "one-time",
+      "hasReceipt": true,
+      "receiptUrl": "/receipts/gas-2026-01-02.jpg"
+    },
+    {
+      "id": "txn-11",
+      "name": "Restaurant Dinner",
+      "amount": 87.50,
+      "type": "expense",
+      "categoryId": "cat-4",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2025-12-30",
+      "frequency": "one-time",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-12",
+      "name": "Pharmacy",
+      "amount": 23.40,
+      "type": "expense",
+      "categoryId": "cat-9",
+      "ownerId": "user-2",
+      "ownerType": "individual",
+      "date": "2025-12-28",
+      "frequency": "one-time",
+      "hasReceipt": true,
+      "receiptUrl": "/receipts/pharmacy-2025-12-28.jpg"
+    },
+    {
+      "id": "txn-13",
+      "name": "Online Shopping",
+      "amount": 156.80,
+      "type": "expense",
+      "categoryId": "cat-10",
+      "ownerId": "user-2",
+      "ownerType": "individual",
+      "date": "2025-12-26",
+      "frequency": "one-time",
+      "hasReceipt": false
+    },
+    {
+      "id": "txn-14",
+      "name": "Weekly Groceries",
+      "amount": 138.20,
+      "type": "expense",
+      "categoryId": "cat-3",
+      "ownerId": null,
+      "ownerType": "shared",
+      "date": "2025-12-30",
+      "frequency": "weekly",
+      "hasReceipt": true,
+      "receiptUrl": "/receipts/groceries-2025-12-30.jpg"
+    },
+    {
+      "id": "txn-15",
+      "name": "Monthly Salary",
+      "amount": 4500,
+      "type": "income",
+      "categoryId": "cat-1",
+      "ownerId": "user-1",
+      "ownerType": "individual",
+      "date": "2025-12-01",
+      "frequency": "monthly",
+      "hasReceipt": false
+    }
+  ]
+}

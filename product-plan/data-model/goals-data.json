@@ -1,0 +1,77 @@
+{
+    "_meta": {
+        "models": {
+            "goals": "Financial targets with progress tracking, owners, and optional deadlines."
+        },
+        "relationships": [
+            "Goals belong to a User (Eden/Sivan) or are Shared."
+        ]
+    },
+    "goals": [
+        {
+            "id": "goal-001",
+            "title": "Emergency Fund",
+            "targetAmount": 20000,
+            "savedAmount": 15500,
+            "deadline": "2026-06-01",
+            "owner": "Shared",
+            "status": "Active",
+            "icon": "shield",
+            "color": "stone"
+        },
+        {
+            "id": "goal-002",
+            "title": "New MacBook Pro",
+            "targetAmount": 3500,
+            "savedAmount": 1200,
+            "deadline": "2026-03-15",
+            "owner": "Eden",
+            "status": "Active",
+            "icon": "laptop",
+            "color": "slate"
+        },
+        {
+            "id": "goal-003",
+            "title": "Japan Trip",
+            "targetAmount": 8000,
+            "savedAmount": 2000,
+            "deadline": "2026-11-01",
+            "owner": "Sivan",
+            "status": "Active",
+            "icon": "plane",
+            "color": "amber"
+        },
+        {
+            "id": "goal-004",
+            "title": "Home Gym",
+            "targetAmount": 1500,
+            "savedAmount": 450,
+            "owner": "Shared",
+            "status": "Active",
+            "icon": "dumbbell",
+            "color": "stone"
+        },
+        {
+            "id": "goal-005",
+            "title": "Wedding Anniversary",
+            "targetAmount": 1000,
+            "savedAmount": 1000,
+            "deadline": "2025-12-20",
+            "owner": "Shared",
+            "status": "Completed",
+            "icon": "gift",
+            "color": "stone"
+        },
+        {
+            "id": "goal-006",
+            "title": "Gaming Monitor",
+            "targetAmount": 600,
+            "savedAmount": 600,
+            "deadline": "2025-10-10",
+            "owner": "Eden",
+            "status": "Completed",
+            "icon": "desktop",
+            "color": "slate"
+        }
+    ]
+}

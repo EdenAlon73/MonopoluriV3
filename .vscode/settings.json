@@ -1,0 +1,7 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm run build": true,
+        "firebase": true,
+        "npx firebase": true
+    }
+}
