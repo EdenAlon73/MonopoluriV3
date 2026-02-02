@@ -8,13 +8,21 @@ import { cn } from "@/lib/utils";
 import { useTransactions } from "@/hooks/useTransactions";
 import { Transaction } from "@/types/transactions";
 
-type Timeframe = 'This Month' | 'Last 3 Months' | 'YTD' | 'All Time';
+type Timeframe = 'This Month' | 'Last 3 Months' | 'YTD' | 'All Time' | 'Custom Month';
 
-const CATEGORY_COLORS: Array<{ id: 'slate' | 'amber' | 'stone' | 'red'; color: string }> = [
-    { id: 'slate', color: '#475569' },
-    { id: 'amber', color: '#d97706' },
-    { id: 'stone', color: '#78716c' },
-    { id: 'red', color: '#dc2626' },
+const CATEGORY_COLORS = [
+    '#FF6B6B', // Red
+    '#4ECDC4', // Turquoise
+    '#45B7D1', // Blue
+    '#FFA07A', // Light Salmon
+    '#98D8C8', // Mint
+    '#F7DC6F', // Yellow
+    '#BB8FCE', // Purple
+    '#F8B739', // Orange
+    '#5DADE2', // Sky Blue
+    '#F1948A', // Pink
+    '#82E0AA', // Green
+    '#D7BDE2', // Lavender
 ];
 
 const TIMEFRAMES: Timeframe[] = ['This Month', 'Last 3 Months', 'YTD', 'All Time'];
@@ -38,12 +46,19 @@ function formatMonth(date: Date) {
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-function getRange(timeframe: Timeframe, today: Date) {
+function getRange(timeframe: Timeframe, today: Date, customMonth?: number, customYear?: number) {
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
     if (timeframe === 'This Month') {
         return { start: startOfMonth, end: endOfMonth, months: 1 };
+    }
+    if (timeframe === 'Custom Month' && customMonth !== undefined && customYear !== undefined) {
+        return {
+            start: new Date(customYear, customMonth, 1),
+            end: new Date(customYear, customMonth + 1, 0),
+            months: 1,
+        };
     }
     if (timeframe === 'Last 3 Months') {
         return {
@@ -68,8 +83,12 @@ function isWithinRange(date: Date, start: Date | null, end: Date | null) {
     return true;
 }
 
-function buildReport(transactions: Transaction[], timeframe: Timeframe, today: Date): AnalyticsReport {
-    if (transactions.length === 0) {
+function buildReport(transactions: Transaction[], timeframe: Timeframe, today: Date, customMonth?: number, customYear?: number): AnalyticsReport {
+    // Filter out future transactions (only include up to today)
+    const currentDateStr = today.toISOString().split('T')[0];
+    const pastTransactions = transactions.filter(t => t.date <= currentDateStr);
+    
+    if (pastTransactions.length === 0) {
         return {
             netWorth: 0,
             savingsRate: 0,
@@ -81,11 +100,11 @@ function buildReport(transactions: Transaction[], timeframe: Timeframe, today: D
         };
     }
 
-    const range = getRange(timeframe, today);
-    const filtered = transactions.filter((t) => isWithinRange(parseDate(t.date), range.start, range.end));
+    const range = getRange(timeframe, today, customMonth, customYear);
+    const filtered = pastTransactions.filter((t) => isWithinRange(parseDate(t.date), range.start, range.end));
 
-    // If timeframe is All Time, use all transactions; otherwise use filtered (but handle empty)
-    const slice = timeframe === 'All Time' ? transactions : filtered;
+    // If timeframe is All Time, use all past transactions; otherwise use filtered (but handle empty)
+    const slice = timeframe === 'All Time' ? pastTransactions : filtered;
     if (slice.length === 0) {
         return {
             netWorth: 0,
@@ -110,17 +129,17 @@ function buildReport(transactions: Transaction[], timeframe: Timeframe, today: D
     if (range.start && range.months > 0) {
         const prevStart = new Date(range.start.getFullYear(), range.start.getMonth() - range.months, 1);
         const prevEnd = new Date(range.start.getFullYear(), range.start.getMonth(), 0);
-        const prevExpense = transactions
+        const prevExpense = pastTransactions
             .filter(t => t.type === 'expense' && isWithinRange(parseDate(t.date), prevStart, prevEnd))
             .reduce((sum, t) => sum + t.amount, 0);
         spendDiff = totalSpend - prevExpense;
     }
 
     // Trend data (month buckets inside selected range)
-    const earliest = transactions.reduce<Date>((min, t) => {
+    const earliest = pastTransactions.reduce<Date>((min, t) => {
         const d = parseDate(t.date);
         return d < min ? d : min;
-    }, parseDate(transactions[0].date));
+    }, parseDate(pastTransactions[0].date));
 
     const trendStart = range.start ?? earliest;
     const trendEnd = range.end ?? today;
@@ -162,7 +181,7 @@ function buildReport(transactions: Transaction[], timeframe: Timeframe, today: D
         .map(([category, amount], idx) => ({
             category,
             amount,
-            color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length].color,
+            color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
         }));
 
     // Drilldown: top expenses
@@ -196,10 +215,26 @@ export default function AnalyticsPage() {
     const { transactions, loading } = useTransactions();
     const [timeframe, setTimeframe] = useState<Timeframe>('This Month');
     const today = useMemo(() => new Date(), []);
+    const [customMonth, setCustomMonth] = useState(today.getMonth());
+    const [customYear, setCustomYear] = useState(today.getFullYear());
+
+    // Generate month options (last 12 months + next 12 months)
+    const monthOptions = useMemo(() => {
+        const options = [];
+        for (let i = -12; i <= 12; i++) {
+            const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            options.push({
+                month: date.getMonth(),
+                year: date.getFullYear(),
+                label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            });
+        }
+        return options;
+    }, [today]);
 
     const report = useMemo(
-        () => buildReport(transactions, timeframe, today),
-        [transactions, timeframe, today]
+        () => buildReport(transactions, timeframe, today, customMonth, customYear),
+        [transactions, timeframe, today, customMonth, customYear]
     );
 
     const hasData = transactions.length > 0 && report.trends.length > 0;
@@ -208,19 +243,42 @@ export default function AnalyticsPage() {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold text-[#323338]">Analytics</h2>
-                <div className="flex bg-white rounded-lg p-1 border">
-                    {TIMEFRAMES.map((t) => (
+                <div className="flex items-center bg-white rounded-lg p-1 border gap-1">
+                    {TIMEFRAMES.filter(t => t !== 'Custom Month').map((t) => (
                         <button
                             key={t}
                             onClick={() => setTimeframe(t)}
                             className={cn(
-                                "px-4 py-1.5 text-sm rounded-md transition-all",
+                                "px-4 py-1.5 text-sm rounded-md transition-all whitespace-nowrap",
                                 timeframe === t ? "bg-[#0073ea] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"
                             )}
                         >
                             {t}
                         </button>
                     ))}
+                    <div className="h-6 w-px bg-gray-300 mx-1" />
+                    <select
+                        className={cn(
+                            "px-3 py-1.5 text-sm rounded-md transition-all cursor-pointer focus:outline-none appearance-none bg-transparent",
+                            timeframe === 'Custom Month' ? "bg-[#0073ea] text-white" : "text-gray-600 hover:bg-gray-100"
+                        )}
+                        value={timeframe === 'Custom Month' ? `${customYear}-${customMonth}` : ''}
+                        onChange={(e) => {
+                            if (e.target.value) {
+                                const [year, month] = e.target.value.split('-').map(Number);
+                                setCustomYear(year);
+                                setCustomMonth(month);
+                                setTimeframe('Custom Month');
+                            }
+                        }}
+                    >
+                        <option value="">Select Month</option>
+                        {monthOptions.map(opt => (
+                            <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -290,9 +348,9 @@ export default function AnalyticsPage() {
                             <CardHeader>
                                 <CardTitle>Spending by Category</CardTitle>
                             </CardHeader>
-                            <CardContent className="h-[300px] flex flex-col items-center justify-center">
+                            <CardContent className="flex flex-col items-center justify-center">
                                 {report.spending.length === 0 ? (
-                                    <div className="text-gray-500 text-sm">No expenses in this timeframe.</div>
+                                    <div className="text-gray-500 text-sm py-8">No expenses in this timeframe.</div>
                                 ) : (
                                     <>
                                         <ResponsiveContainer width="100%" height={200}>
@@ -313,12 +371,12 @@ export default function AnalyticsPage() {
                                                 <Tooltip formatter={(val?: number) => formatCurrency(val ?? 0)} />
                                             </PieChart>
                                         </ResponsiveContainer>
-                                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-4 text-sm">
+                                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 mt-4 text-xs max-h-[200px] overflow-y-auto px-2">
                                             {report.spending.map((item) => (
-                                                <div key={item.category} className="flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                                                    <span className="text-gray-600">{item.category}</span>
-                                                    <span className="font-medium">{formatCurrency(item.amount)}</span>
+                                                <div key={item.category} className="flex items-center gap-1.5 min-w-0">
+                                                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                                                    <span className="text-gray-600 truncate flex-shrink min-w-0">{item.category}</span>
+                                                    <span className="font-medium whitespace-nowrap ml-auto">{formatCurrency(item.amount)}</span>
                                                 </div>
                                             ))}
                                         </div>
