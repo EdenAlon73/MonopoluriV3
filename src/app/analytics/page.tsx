@@ -241,25 +241,25 @@ export default function AnalyticsPage() {
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="space-y-4">
                 <h2 className="text-3xl font-bold text-[#323338]">Analytics</h2>
-                <div className="flex items-center bg-white rounded-lg p-1 border gap-1">
+                <div className="flex items-center bg-white rounded-lg p-1 border gap-1 overflow-x-auto">
                     {TIMEFRAMES.filter(t => t !== 'Custom Month').map((t) => (
                         <button
                             key={t}
                             onClick={() => setTimeframe(t)}
                             className={cn(
-                                "px-4 py-1.5 text-sm rounded-md transition-all whitespace-nowrap",
+                                "px-3 sm:px-4 py-1.5 text-xs sm:text-sm rounded-md transition-all whitespace-nowrap flex-shrink-0",
                                 timeframe === t ? "bg-[#0073ea] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"
                             )}
                         >
                             {t}
                         </button>
                     ))}
-                    <div className="h-6 w-px bg-gray-300 mx-1" />
+                    <div className="h-6 w-px bg-gray-300 mx-1 flex-shrink-0" />
                     <select
                         className={cn(
-                            "px-3 py-1.5 text-sm rounded-md transition-all cursor-pointer focus:outline-none appearance-none bg-transparent",
+                            "px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all cursor-pointer focus:outline-none appearance-none bg-transparent flex-shrink-0 min-w-[100px]",
                             timeframe === 'Custom Month' ? "bg-[#0073ea] text-white" : "text-gray-600 hover:bg-gray-100"
                         )}
                         value={timeframe === 'Custom Month' ? `${customYear}-${customMonth}` : ''}
