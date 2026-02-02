@@ -1,4 +1,4 @@
-import type { ChatMessageData } from '@/../product/sections/ai-insights/types';
+import type { ChatMessageData } from '@/../product-plan/data-model/ai-insights-types';
 import { cn } from '@/lib/utils';
 import { Bot, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';

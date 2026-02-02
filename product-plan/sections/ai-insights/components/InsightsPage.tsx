@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import type { AIInsightsData, ChatMessageData } from '@/../product/sections/ai-insights/types';
+import type { AIInsightsData, ChatMessageData } from '@/../product-plan/data-model/ai-insights-types';
 import { InsightCard } from './InsightCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatInput } from './ChatInput';
