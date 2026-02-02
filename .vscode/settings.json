@@ -3,6 +3,8 @@
         "npm run build": true,
         "firebase": true,
         "npx firebase": true,
-        "git add": true
+        "git add": true,
+        "git commit": true,
+        "git push": true
     }
 }
