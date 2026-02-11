@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CheckIcon, ArrowRight, ArrowLeft, CalendarDays } from "lucide-react";
 import { Button } from "./Button";
 import { Input } from "./Input";
 import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/lib/constants";
 import { Transaction } from "@/types/transactions";
+import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
 
 type StepKey = "type" | "description" | "amount" | "category" | "date" | "owner" | "frequency" | "review";
 
@@ -51,18 +52,37 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
     const today = useMemo(() => new Date().toISOString().split("T")[0], []);
     const [currentStep, setCurrentStep] = useState(0);
     const [submitting, setSubmitting] = useState(false);
-    const [form, setForm] = useState<FormState>({
-        type: initialTransaction?.type ?? initialType,
-        description: initialTransaction?.name ?? "",
-        amount: initialTransaction ? String(initialTransaction.amount) : "",
-        categoryId: initialTransaction?.categoryId ?? (CATEGORIES.find(c => c.type === (initialType === "income" ? "income" : "expense"))?.id || CATEGORIES[0].id),
-        date: initialTransaction?.date ?? today,
-        owner: (initialTransaction?.ownerId === "shared" ? "Shared" : (initialTransaction?.ownerId?.toLowerCase() === "eden" ? "Eden" : initialTransaction?.ownerId?.toLowerCase() === "sivan" ? "Sivan" : "Shared")),
-        frequency: initialTransaction?.frequency ?? "one-time",
+    const [form, setForm] = useState<FormState>(() => {
+        const type = initialTransaction?.type ?? initialType;
+        const resolvedCategory = resolveCategoryForTransaction({
+            type,
+            categoryId: initialTransaction?.categoryId,
+            categoryName: initialTransaction?.categoryName,
+        });
+        return {
+            type,
+            description: initialTransaction?.name ?? "",
+            amount: initialTransaction ? String(initialTransaction.amount) : "",
+            categoryId: resolvedCategory.id,
+            date: initialTransaction?.date ?? today,
+            owner: (initialTransaction?.ownerId === "shared" ? "Shared" : (initialTransaction?.ownerId?.toLowerCase() === "eden" ? "Eden" : initialTransaction?.ownerId?.toLowerCase() === "sivan" ? "Sivan" : "Shared")),
+            frequency: initialTransaction?.frequency ?? "one-time",
+        };
     });
 
     const themeColor = form.type === "expense" ? "#d92c2c" : "#1d8a4c";
     const filteredCategories = useMemo(() => CATEGORIES.filter(c => c.type === form.type), [form.type]);
+
+    useEffect(() => {
+        const currentCategory = CATEGORIES.find((category) => category.id === form.categoryId);
+        if (currentCategory?.type === form.type) return;
+
+        const fallback = resolveCategoryForTransaction({
+            type: form.type,
+            categoryId: form.categoryId,
+        });
+        setForm((prev) => ({ ...prev, categoryId: fallback.id }));
+    }, [form.type, form.categoryId]);
 
     const progress = ((currentStep + 1) / STEP_DEFS.length) * 100;
 
@@ -92,14 +112,17 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            const category = CATEGORIES.find(c => c.id === form.categoryId);
+            const category = resolveCategoryForTransaction({
+                type: form.type,
+                categoryId: form.categoryId,
+            });
             const payload: Omit<Transaction, "id"> = {
                 name: form.description,
                 amount: parseFloat(form.amount),
                 date: form.date,
                 type: form.type,
-                categoryId: form.categoryId,
-                categoryName: category?.name || "Misc",
+                categoryId: category.id,
+                categoryName: category.name,
                 ownerId: form.owner === "Shared" ? "shared" : form.owner.toLowerCase(),
                 ownerType: form.owner === "Shared" ? "shared" : "individual",
                 frequency: form.frequency,
@@ -116,7 +139,7 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
         { label: "Type", value: form.type === "income" ? "Income" : "Expense" },
         { label: "Description", value: form.description || "—" },
         { label: "Amount", value: form.amount ? `€${parseFloat(form.amount).toLocaleString()}` : "—" },
-        { label: "Category", value: CATEGORIES.find(c => c.id === form.categoryId)?.name || "—" },
+        { label: "Category", value: resolveCategoryForTransaction({ type: form.type, categoryId: form.categoryId }).name || "—" },
         { label: "Date", value: form.date },
         { label: "Owner", value: form.owner },
         { label: "Frequency", value: form.frequency },

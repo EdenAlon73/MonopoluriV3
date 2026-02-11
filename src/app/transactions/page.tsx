@@ -7,6 +7,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { Transaction } from "@/types/transactions";
 import { EditTransactionModal } from "@/components/modals/EditTransactionModal";
+import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
 
 type SortField = 'date' | 'name' | 'categoryName' | 'ownerType' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -32,6 +33,12 @@ export default function TransactionsPage() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
+    const getCategoryLabel = (tx: Transaction) => resolveCategoryForTransaction({
+        type: tx.type,
+        categoryId: tx.categoryId,
+        categoryName: tx.categoryName,
+    }).name;
+
     // Filter transactions up to current date only (for balance calculation)
     const currentDateStr = today.toISOString().split('T')[0];
     const pastTransactions = transactions.filter(t => t.date <= currentDateStr);
@@ -55,7 +62,7 @@ export default function TransactionsPage() {
                 case 'amount':
                     return tx.amount;
                 case 'categoryName':
-                    return tx.categoryName ?? '';
+                    return getCategoryLabel(tx);
                 default:
                     return tx[field] ?? '';
             }
@@ -188,7 +195,7 @@ export default function TransactionsPage() {
                                 <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="p-3 text-gray-600 whitespace-nowrap">{tx.date}</td>
                                     <td className="p-3 font-medium">{tx.name}</td>
-                                    <td className="p-3"><span className="px-2 py-1 bg-gray-100 rounded-md text-xs">{tx.categoryName}</span></td>
+                                    <td className="p-3"><span className="px-2 py-1 bg-gray-100 rounded-md text-xs">{getCategoryLabel(tx)}</span></td>
                                     <td className="p-3">
                                         {tx.ownerType === 'shared' ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Shared</span> :
                                             <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Individual</span>}
