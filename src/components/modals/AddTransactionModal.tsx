@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { CATEGORIES } from '@/lib/constants';
 import { useUser } from '@/contexts/UserContext';
 import { Transaction } from '@/types/transactions';
 import { MultiStepTransactionForm } from '@/components/ui/multistep-form';

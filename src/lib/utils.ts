@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Transaction } from '@/types/transactions';
+import { clampAnchorDay, generateRecurringDates, getNextRecurringDate as getNextRecurringDateForSeries } from '@/lib/recurringEngine';
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -10,27 +11,9 @@ export function cn(...inputs: ClassValue[]) {
  * Calculate the next date for a recurring transaction
  */
 export function getNextRecurringDate(currentDate: string, frequency: Transaction['frequency']): string {
-    const date = new Date(currentDate);
-    
-    switch (frequency) {
-        case 'daily':
-            date.setDate(date.getDate() + 1);
-            break;
-        case 'weekly':
-            date.setDate(date.getDate() + 7);
-            break;
-        case 'bi-weekly':
-            date.setDate(date.getDate() + 14);
-            break;
-        case 'monthly':
-            date.setMonth(date.getMonth() + 1);
-            break;
-        case 'one-time':
-        default:
-            return currentDate;
-    }
-    
-    return date.toISOString().split('T')[0];
+    if (frequency === 'one-time') return currentDate;
+    const anchorDay = clampAnchorDay(Number(currentDate.split('-')[2] ?? 1));
+    return getNextRecurringDateForSeries(currentDate, frequency, anchorDay);
 }
 
 /**
@@ -46,21 +29,20 @@ export function generateRecurringInstances(
         return [];
     }
 
-    const instances: Omit<Transaction, 'id'>[] = [];
-    let currentDate = baseTransaction.date;
-    const endDate = new Date(currentDate);
+    const endDate = new Date(baseTransaction.date);
     endDate.setDate(endDate.getDate() + (weeksAhead * 7));
+    const horizon = endDate.toISOString().split('T')[0];
+    const anchorDay = clampAnchorDay(Number(baseTransaction.date.split('-')[2] ?? 1));
+    const dates = generateRecurringDates({
+        frequency: baseTransaction.frequency,
+        startDate: baseTransaction.date,
+        anchorDay,
+        fromDate: baseTransaction.date,
+        toDate: horizon,
+    }).filter((date) => date !== baseTransaction.date);
 
-    while (new Date(currentDate) <= endDate) {
-        currentDate = getNextRecurringDate(currentDate, baseTransaction.frequency);
-        
-        if (new Date(currentDate) <= endDate) {
-            instances.push({
-                ...baseTransaction,
-                date: currentDate,
-            });
-        }
-    }
-
-    return instances;
+    return dates.map((date) => ({
+        ...baseTransaction,
+        date,
+    }));
 }

@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal';
 import { CATEGORIES } from '@/lib/constants';
 import { User } from '@/contexts/UserContext';
 import { Transaction } from '@/types/transactions';
+import { previewLegacyRecurringMigration, RecurringMigrationPreview, runLegacyRecurringMigration } from '@/lib/recurringMigration';
 
 type DockItem = {
     icon: typeof Wallet;
@@ -165,6 +166,14 @@ function parseAmount(rawAmount: string) {
     };
 }
 
+function getCreatedAtSeconds(value: unknown): number {
+    if (value && typeof value === 'object' && 'seconds' in value) {
+        const seconds = (value as { seconds?: unknown }).seconds;
+        if (typeof seconds === 'number') return seconds;
+    }
+    return 0;
+}
+
 function parseOwner(ownerRaw: string) {
     const owner = ownerRaw.trim().toLowerCase();
     if (!owner || owner === 'shared' || owner === 'joint' || owner === 'both') {
@@ -250,6 +259,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const [rangeEndDate, setRangeEndDate] = useState('');
     const [showTxModal, setShowTxModal] = useState(false);
     const [showGoalModal, setShowGoalModal] = useState(false);
+    const [migrationPreview, setMigrationPreview] = useState<RecurringMigrationPreview | null>(null);
+    const [migrationPreviewLoading, setMigrationPreviewLoading] = useState(false);
+    const [migrationRunning, setMigrationRunning] = useState(false);
+    const [migrationConfirmText, setMigrationConfirmText] = useState('');
     const isAuthPage = pathname.startsWith('/auth');
     const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
     const defaultStartISO = useMemo(() => {
@@ -405,8 +418,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         return [...filtered].sort((a, b) => {
             if (a.date !== b.date) return a.date.localeCompare(b.date);
-            const aCreated = a.createdAt?.seconds ?? 0;
-            const bCreated = b.createdAt?.seconds ?? 0;
+            const aCreated = getCreatedAtSeconds(a.createdAt);
+            const bCreated = getCreatedAtSeconds(b.createdAt);
             return aCreated - bCreated;
         });
     }, [exportableTransactions, exportMode, selectedExportMonth, rangeStartDate, rangeEndDate]);
@@ -418,22 +431,42 @@ export function Shell({ children }: { children: React.ReactNode }) {
             // Dynamic import to avoid SSR issues
             const { db } = await import('@/lib/firebase');
             const { collection, query, getDocs, writeBatch } = await import('firebase/firestore');
-            
-            const q = query(collection(db, 'transactions'));
-            const snapshot = await getDocs(q);
-            const batch = writeBatch(db);
-            
-            snapshot.docs.forEach(doc => {
-                batch.delete(doc.ref);
-            });
 
-            if (includeGoals) {
-                const goalsSnapshot = await getDocs(query(collection(db, 'goals')));
-                goalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+            const [transactionsSnapshot, recurringSnapshot, recurringExceptionsSnapshot, goalsSnapshot] = await Promise.all([
+                getDocs(query(collection(db, 'transactions'))),
+                getDocs(query(collection(db, 'recurringTransactions'))),
+                getDocs(query(collection(db, 'recurringExceptions'))),
+                includeGoals ? getDocs(query(collection(db, 'goals'))) : Promise.resolve(null),
+            ]);
+
+            const refsToDelete = [
+                ...transactionsSnapshot.docs.map((docSnapshot) => docSnapshot.ref),
+                ...recurringSnapshot.docs.map((docSnapshot) => docSnapshot.ref),
+                ...recurringExceptionsSnapshot.docs.map((docSnapshot) => docSnapshot.ref),
+                ...(goalsSnapshot ? goalsSnapshot.docs.map((docSnapshot) => docSnapshot.ref) : []),
+            ];
+
+            let batch = writeBatch(db);
+            let ops = 0;
+            for (const ref of refsToDelete) {
+                batch.delete(ref);
+                ops++;
+                if (ops >= 450) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    ops = 0;
+                }
             }
-            
-            await batch.commit();
-            setToast({ variant: 'success', message: includeGoals ? 'Transactions and goals deleted successfully' : 'All transactions deleted successfully' });
+            if (ops > 0) {
+                await batch.commit();
+            }
+
+            setToast({
+                variant: 'success',
+                message: includeGoals
+                    ? 'Transactions, recurring data, and goals deleted successfully'
+                    : 'Transactions and recurring data deleted successfully',
+            });
         } catch (err) {
             console.error(err);
             setToast({ variant: 'error', message: 'Error deleting transactions' });
@@ -447,7 +480,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         setDeleting(true);
         try {
             const { db } = await import('@/lib/firebase');
-            const { collection, query, getDocs, writeBatch } = await import('firebase/firestore');
+            const { collection, query, doc, getDocs, writeBatch, serverTimestamp } = await import('firebase/firestore');
 
             const snapshot = await getDocs(query(collection(db, 'transactions')));
             const docsToDelete = snapshot.docs.filter((docSnapshot) => {
@@ -464,6 +497,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
             let ops = 0;
 
             for (const txDoc of docsToDelete) {
+                const txData = txDoc.data() as Record<string, unknown>;
+                const recurrenceId = typeof txData.recurrenceId === 'string' ? txData.recurrenceId : '';
+                const txDate = typeof txData.date === 'string' ? txData.date : '';
+                if (recurrenceId && txDate) {
+                    const exceptionRef = doc(db, 'recurringExceptions', `${recurrenceId}_${txDate}_manual`);
+                    batch.set(exceptionRef, {
+                        recurrenceId,
+                        date: txDate,
+                        kind: 'manual-delete',
+                        createdAt: serverTimestamp(),
+                    }, { merge: true });
+                    ops++;
+                }
+
                 batch.delete(txDoc.ref);
                 ops++;
 
@@ -774,7 +821,53 @@ export function Shell({ children }: { children: React.ReactNode }) {
         { icon: Sparkles, label: 'AI Insights', href: '/ai-insights' },
     ], []);
 
-    const isFabRoute = pathname.startsWith('/transactions') || pathname.startsWith('/goals');
+    const isFabRoute = pathname.startsWith('/transactions') || pathname.startsWith('/goals') || pathname.startsWith('/recurring');
+    const canRunRecurringMigration = (currentUser?.email?.toLowerCase() ?? '').includes('eden');
+
+    const handlePreviewRecurringMigration = async () => {
+        setMigrationPreviewLoading(true);
+        try {
+            const preview = await previewLegacyRecurringMigration();
+            setMigrationPreview(preview);
+            setToast({
+                variant: 'success',
+                message: `Preview ready: ${preview.legacyRootSeriesCount} legacy recurring series found.`,
+            });
+        } catch (error) {
+            console.error(error);
+            setToast({ variant: 'error', message: 'Failed to preview recurring migration' });
+        } finally {
+            setMigrationPreviewLoading(false);
+        }
+    };
+
+    const handleRunRecurringMigration = async () => {
+        if (!canRunRecurringMigration) {
+            setToast({ variant: 'error', message: 'You are not allowed to run recurring migration.' });
+            return;
+        }
+        if (migrationConfirmText.trim() !== 'MIGRATE RECURRING') {
+            setToast({ variant: 'error', message: 'Type MIGRATE RECURRING to confirm migration.' });
+            return;
+        }
+
+        setMigrationRunning(true);
+        try {
+            const result = await runLegacyRecurringMigration(currentUser?.id ?? null);
+            setToast({
+                variant: 'success',
+                message: `Migration completed: ${result.createdOrUpdatedSeriesCount} series and ${result.updatedOccurrencesCount} occurrences updated.`,
+            });
+            setMigrationConfirmText('');
+            const preview = await previewLegacyRecurringMigration();
+            setMigrationPreview(preview);
+        } catch (error) {
+            console.error(error);
+            setToast({ variant: 'error', message: 'Recurring migration failed.' });
+        } finally {
+            setMigrationRunning(false);
+        }
+    };
 
     const dockItems: DockItem[] = [
         ...navItems.map(item => ({
@@ -838,6 +931,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                             {
                                 label: 'Transaction',
                                 onClick: () => setShowTxModal(true),
+                            },
+                            {
+                                label: 'Recurring',
+                                onClick: () => router.push('/recurring'),
                             },
                             {
                                 label: 'Goal',
@@ -1008,6 +1105,60 @@ export function Shell({ children }: { children: React.ReactNode }) {
                             <Upload size={16} className="mr-2" />
                             {importing ? 'Importing…' : 'Import CSV'}
                         </Button>
+                    </div>
+
+                    <div className="border-t pt-4 space-y-3">
+                        <div>
+                            <h4 className="text-sm font-semibold text-gray-900">Recurring Migration</h4>
+                            <p className="text-xs text-gray-500">
+                                Convert legacy frequency-based recurring transactions into the new recurring manager format.
+                            </p>
+                        </div>
+
+                        {!canRunRecurringMigration ? (
+                            <p className="text-xs text-gray-500">Only an admin account can run this migration.</p>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="secondary"
+                                    className="w-full"
+                                    onClick={handlePreviewRecurringMigration}
+                                    disabled={migrationPreviewLoading || migrationRunning}
+                                >
+                                    {migrationPreviewLoading ? 'Generating preview…' : 'Preview migration'}
+                                </Button>
+
+                                {migrationPreview && (
+                                    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+                                        <p>Legacy recurring series: {migrationPreview.legacyRootSeriesCount}</p>
+                                        <p>Legacy occurrences linked to series: {migrationPreview.legacyOccurrenceCount}</p>
+                                        <p>Existing migrated series: {migrationPreview.existingRecurringSeriesCount}</p>
+                                        <p>Series that will be created: {migrationPreview.seriesToCreateCount}</p>
+                                        <p>Occurrences that will be normalized: {migrationPreview.occurrencesToUpdateCount}</p>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-gray-600">Type MIGRATE RECURRING to confirm</label>
+                                    <input
+                                        type="text"
+                                        value={migrationConfirmText}
+                                        onChange={(e) => setMigrationConfirmText(e.target.value)}
+                                        placeholder="MIGRATE RECURRING"
+                                        className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0073ea]"
+                                    />
+                                </div>
+
+                                <Button
+                                    variant="danger"
+                                    className="w-full"
+                                    onClick={handleRunRecurringMigration}
+                                    disabled={migrationRunning || migrationPreviewLoading}
+                                >
+                                    {migrationRunning ? 'Running migration…' : 'Run recurring migration'}
+                                </Button>
+                            </>
+                        )}
                     </div>
 
                     <div className="border-t pt-4 space-y-3">

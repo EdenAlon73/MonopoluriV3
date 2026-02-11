@@ -8,6 +8,7 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import { Transaction } from "@/types/transactions";
 import { EditTransactionModal } from "@/components/modals/EditTransactionModal";
 import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
+import { useRouter } from "next/navigation";
 
 type SortField = 'date' | 'name' | 'categoryName' | 'ownerType' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -23,7 +24,16 @@ function SortIcon({ field, activeField, direction }: SortIconProps) {
     return direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />;
 }
 
+function getCreatedAtSeconds(value: unknown): number {
+    if (value && typeof value === 'object' && 'seconds' in value) {
+        const seconds = (value as { seconds?: unknown }).seconds;
+        if (typeof seconds === 'number') return seconds;
+    }
+    return 0;
+}
+
 export default function TransactionsPage() {
+    const router = useRouter();
     const { transactions, loading, updateTransaction, deleteTransaction } = useTransactions();
     const today = useMemo(() => new Date(), []);
     
@@ -71,8 +81,8 @@ export default function TransactionsPage() {
         return [...filteredTransactions].sort((a, b) => {
             if (sortField === 'date') {
                 if (a.date === b.date) {
-                    const aCreated = a.createdAt?.seconds ?? 0;
-                    const bCreated = b.createdAt?.seconds ?? 0;
+                    const aCreated = getCreatedAtSeconds(a.createdAt);
+                    const bCreated = getCreatedAtSeconds(b.createdAt);
                     return sortDirection === 'asc' ? aCreated - bCreated : bCreated - aCreated;
                 }
             }
@@ -204,16 +214,29 @@ export default function TransactionsPage() {
                                         {tx.type === 'income' ? '+' : '-'}€{tx.amount.toLocaleString()}
                                     </td>
                                     <td className="p-3 text-right space-x-2 whitespace-nowrap">
-                                        <button
-                                            className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
-                                            onClick={() => setEditingTx(tx)}
-                                        >
-                                            Edit
-                                        </button>
+                                        {tx.recurrenceId ? (
+                                            <button
+                                                className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
+                                                onClick={() => router.push(`/recurring?edit=${tx.recurrenceId}`)}
+                                            >
+                                                Edit in Manager
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
+                                                onClick={() => setEditingTx(tx)}
+                                            >
+                                                Edit
+                                            </button>
+                                        )}
                                         <button
                                             className="text-xs px-2 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
                                             onClick={() => {
-                                                const confirmDelete = window.confirm("Delete this transaction?");
+                                                const confirmDelete = window.confirm(
+                                                    tx.recurrenceId
+                                                        ? "Delete this recurring occurrence for this month only?"
+                                                        : "Delete this transaction?",
+                                                );
                                                 if (confirmDelete) deleteTransaction(tx.id);
                                             }}
                                         >

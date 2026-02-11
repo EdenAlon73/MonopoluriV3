@@ -24,7 +24,9 @@ export interface Transaction {
     hasReceipt: boolean
     receiptUrl?: string
     parentTransactionId?: string // Links recurring instances to their base transaction
-    createdAt?: any
+    recurrenceId?: string
+    occurrenceDate?: string
+    createdAt?: unknown
 }
 
 export interface TransactionSummary {

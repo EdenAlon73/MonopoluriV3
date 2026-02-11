@@ -9,7 +9,7 @@ import { CATEGORIES } from "@/lib/constants";
 import { Transaction } from "@/types/transactions";
 import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
 
-type StepKey = "type" | "description" | "amount" | "category" | "date" | "owner" | "frequency" | "review";
+type StepKey = "type" | "description" | "amount" | "category" | "date" | "owner" | "review";
 
 type StepDef = {
     id: StepKey;
@@ -24,7 +24,6 @@ const STEP_DEFS: StepDef[] = [
     { id: "category", label: "Category", helper: "Pick a category" },
     { id: "date", label: "Date", helper: "When did/will it happen?" },
     { id: "owner", label: "Owner", helper: "Who owns this?" },
-    { id: "frequency", label: "Frequency", helper: "How often?" },
     { id: "review", label: "Review", helper: "Confirm and save" },
 ];
 
@@ -35,11 +34,9 @@ type FormState = {
     categoryId: string;
     date: string;
     owner: "Shared" | "Eden" | "Sivan";
-    frequency: Transaction["frequency"];
 };
 
 const OWNER_OPTIONS: Array<FormState["owner"]> = ["Shared", "Eden", "Sivan"];
-const FREQUENCY_OPTIONS: Array<Transaction["frequency"]> = ["one-time", "weekly", "monthly"];
 
 type MultiStepTransactionFormProps = {
     onSubmit: (tx: Omit<Transaction, "id">, id?: string) => Promise<void>;
@@ -66,7 +63,6 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
             categoryId: resolvedCategory.id,
             date: initialTransaction?.date ?? today,
             owner: (initialTransaction?.ownerId === "shared" ? "Shared" : (initialTransaction?.ownerId?.toLowerCase() === "eden" ? "Eden" : initialTransaction?.ownerId?.toLowerCase() === "sivan" ? "Sivan" : "Shared")),
-            frequency: initialTransaction?.frequency ?? "one-time",
         };
     });
 
@@ -98,7 +94,6 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
         if (stepId === "category") return !!form.categoryId;
         if (stepId === "date") return !!form.date;
         if (stepId === "owner") return !!form.owner;
-        if (stepId === "frequency") return !!form.frequency;
         return true;
     }, [currentStep, form]);
 
@@ -125,7 +120,7 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
                 categoryName: category.name,
                 ownerId: form.owner === "Shared" ? "shared" : form.owner.toLowerCase(),
                 ownerType: form.owner === "Shared" ? "shared" : "individual",
-                frequency: form.frequency,
+                frequency: "one-time",
                 hasReceipt: false,
             };
 
@@ -142,7 +137,6 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
         { label: "Category", value: resolveCategoryForTransaction({ type: form.type, categoryId: form.categoryId }).name || "—" },
         { label: "Date", value: form.date },
         { label: "Owner", value: form.owner },
-        { label: "Frequency", value: form.frequency },
     ];
 
     return (
@@ -290,18 +284,6 @@ export function MultiStepTransactionForm({ onSubmit, loading = false, initialTyp
                         >
                             {OWNER_OPTIONS.map(o => (
                                 <option key={o} value={o}>{o}</option>
-                            ))}
-                        </select>
-                    )}
-
-                    {STEP_DEFS[currentStep].id === "frequency" && (
-                        <select
-                            className="w-full h-12 px-3 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2"
-                            value={form.frequency}
-                            onChange={(e) => setField("frequency", e.target.value as Transaction["frequency"])}
-                        >
-                            {FREQUENCY_OPTIONS.map(f => (
-                                <option key={f} value={f}>{f.replace("-", " ")}</option>
                             ))}
                         </select>
                     )}
