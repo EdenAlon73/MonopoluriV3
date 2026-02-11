@@ -46,6 +46,14 @@ function formatMonth(date: Date) {
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+function normalizeExpenseCategory(tx: Transaction) {
+    const rawCategory = tx.categoryName || tx.categoryId || 'Uncategorized';
+    if (tx.categoryId === 'food' || rawCategory.toLowerCase() === 'food') {
+        return 'Dining Out';
+    }
+    return rawCategory;
+}
+
 function getRange(timeframe: Timeframe, today: Date, customMonth?: number, customYear?: number) {
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -172,7 +180,7 @@ function buildReport(transactions: Transaction[], timeframe: Timeframe, today: D
     // Spending by category (expenses only)
     const expenseByCategory: Record<string, number> = {};
     slice.filter(t => t.type === 'expense').forEach(tx => {
-        const key = tx.categoryName || tx.categoryId || 'Uncategorized';
+        const key = normalizeExpenseCategory(tx);
         expenseByCategory[key] = (expenseByCategory[key] || 0) + tx.amount;
     });
 

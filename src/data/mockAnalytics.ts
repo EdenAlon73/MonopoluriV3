@@ -18,7 +18,7 @@ export const MOCK_TRENDS: TrendData[] = [
 
 export const MOCK_SPENDING: SpendingData[] = [
     { category: "Housing", amount: 1800, color: "slate" },
-    { category: "Food", amount: 850, color: "stone" },
+    { category: "Dining Out", amount: 850, color: "stone" },
     { category: "Shopping", amount: 600, color: "amber" },
     { category: "Transport", amount: 400, color: "red" },
     { category: "Utilities", amount: 350, color: "stone" },
