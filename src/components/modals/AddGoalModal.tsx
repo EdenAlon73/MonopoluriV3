@@ -17,9 +17,10 @@ export function AddGoalModal({ isOpen, onClose, onSave }: AddGoalModalProps) {
     const [loading, setLoading] = useState(false);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="New Goal" headerVariant="close-only">
+        <Modal isOpen={isOpen} onClose={onClose} title="New Goal" variant="sheet">
             <MultiStepGoalForm
                 loading={loading}
+                onClose={onClose}
                 onSubmit={async (goal: Omit<Goal, 'id'>) => {
                     if (!currentUser) return;
                     setLoading(true);

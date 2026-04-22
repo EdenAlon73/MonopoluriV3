@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { Wallet, Target, BarChart3, Sparkles, Settings, AlertTriangle, CheckCircle2, X, Download, Upload } from 'lucide-react'; // Icons
+import { Wallet, Target, BarChart3, Sparkles, Settings, AlertTriangle, CheckCircle2, X, Download, Upload, Receipt, RotateCw } from 'lucide-react'; // Icons
 import { cn } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 import { useTransactions } from '@/hooks/useTransactions';
@@ -920,14 +920,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         options={[
                             {
                                 label: 'Transaction',
+                                Icon: <Receipt className="w-4 h-4" />,
                                 onClick: () => setShowTxModal(true),
                             },
                             {
                                 label: 'Recurring',
+                                Icon: <RotateCw className="w-4 h-4" />,
                                 onClick: () => router.push('/recurring'),
                             },
                             {
                                 label: 'Goal',
+                                Icon: <Target className="w-4 h-4" />,
                                 onClick: () => setShowGoalModal(true),
                             },
                         ]}

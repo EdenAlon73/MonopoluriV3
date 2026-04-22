@@ -20,10 +20,11 @@ export function EditTransactionModal({ isOpen, transaction, onClose, onSave }: E
     if (!transaction) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Edit Transaction" headerVariant="close-only">
+        <Modal isOpen={isOpen} onClose={onClose} title="Edit Transaction" variant="sheet">
             <MultiStepTransactionForm
                 initialTransaction={transaction}
                 loading={loading}
+                onClose={onClose}
                 onSubmit={async (tx: Omit<Transaction, "id">) => {
                     if (!currentUser) return;
                     setLoading(true);

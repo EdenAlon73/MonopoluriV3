@@ -15,13 +15,13 @@ interface AddTransactionModalProps {
 export function AddTransactionModal({ isOpen, onClose, onSave }: AddTransactionModalProps) {
     const { currentUser } = useUser();
     const [loading, setLoading] = useState(false);
-    const [initialType] = useState<'income' | 'expense'>('expense');
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="New Transaction" headerVariant="close-only">
+        <Modal isOpen={isOpen} onClose={onClose} title="New Transaction" variant="sheet">
             <MultiStepTransactionForm
-                initialType={initialType}
+                initialType="expense"
                 loading={loading}
+                onClose={onClose}
                 onSubmit={async (tx: Omit<Transaction, 'id'>) => {
                     if (!currentUser) return;
                     setLoading(true);
