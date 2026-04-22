@@ -32,7 +32,6 @@ type DockItem = {
 };
 
 type ExportMode = 'month' | 'range';
-type ExportScope = 'transactions' | 'expenses';
 type DeleteMode = 'all' | 'month' | 'range';
 
 function toOwnerLabel(tx: Transaction) {
@@ -134,7 +133,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const [selectedDeleteMonth, setSelectedDeleteMonth] = useState('');
     const [deleteRangeStart, setDeleteRangeStart] = useState('');
     const [deleteRangeEnd, setDeleteRangeEnd] = useState('');
-    const [exportScope, setExportScope] = useState<ExportScope>('transactions');
     const [exportMode, setExportMode] = useState<ExportMode>('month');
     const [selectedExportMonth, setSelectedExportMonth] = useState('');
     const [rangeStartDate, setRangeStartDate] = useState('');
@@ -179,11 +177,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }, [currentUser, isAuthPage, router, userLoading]);
 
     const exportableTransactions = useMemo(() => {
-        const scoped = exportScope === 'expenses'
-            ? transactions.filter((tx) => tx.type === 'expense')
-            : transactions;
-        return scoped.filter((tx) => Boolean(tx.date));
-    }, [transactions, exportScope]);
+        return transactions.filter((tx) => Boolean(tx.date));
+    }, [transactions]);
 
     const exportMonthOptions = useMemo(() => {
         const months = new Map<string, { value: string; label: string; count: number }>();
@@ -495,8 +490,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         const rangeLabel = exportMode === 'month'
             ? selectedExportMonth
             : `${rangeStartDate}_to_${rangeEndDate}`;
-        const scopeLabel = exportScope === 'expenses' ? 'expenses' : 'transactions';
-        const fileName = `monopoluri-${scopeLabel}-${rangeLabel || 'export'}.csv`;
+        const fileName = `monopoluri-transactions-${rangeLabel || 'export'}.csv`;
 
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -954,36 +948,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         </div>
 
                         <div className="space-y-2">
-                            <p className="text-xs font-medium text-gray-600">Data</p>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setExportScope('transactions')}
-                                    className={cn(
-                                        "h-9 rounded-md border text-sm font-medium transition-colors",
-                                        exportScope === 'transactions'
-                                            ? "border-[#0073ea] bg-[#e6f0ff] text-[#0073ea]"
-                                            : "border-gray-300 hover:bg-gray-50"
-                                    )}
-                                >
-                                    Transactions
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setExportScope('expenses')}
-                                    className={cn(
-                                        "h-9 rounded-md border text-sm font-medium transition-colors",
-                                        exportScope === 'expenses'
-                                            ? "border-[#0073ea] bg-[#e6f0ff] text-[#0073ea]"
-                                            : "border-gray-300 hover:bg-gray-50"
-                                    )}
-                                >
-                                    Expenses
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
                             <p className="text-xs font-medium text-gray-600">Range Type</p>
                             <div className="grid grid-cols-2 gap-2">
                                 <button
@@ -1015,10 +979,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
                         {transactionsLoading ? (
                             <div className="text-sm text-gray-500">Loading data…</div>
-                        ) : exportScope === 'expenses' && exportableTransactions.length === 0 ? (
-                            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                                No expense data available yet.
-                            </div>
                         ) : exportMode === 'month' ? (
                             <div className="space-y-2">
                                 <label className="text-xs font-medium text-gray-600">Month</label>
