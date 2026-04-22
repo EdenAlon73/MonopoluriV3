@@ -10,10 +10,11 @@ interface ModalProps {
     onClose: () => void;
     title: string;
     headerVariant?: "default" | "close-only";
+    maxWidthClass?: string;
     children: React.ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, children, headerVariant = "default" }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, headerVariant = "default", maxWidthClass = "max-w-lg" }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -38,7 +39,10 @@ export function Modal({ isOpen, onClose, title, children, headerVariant = "defau
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div
                 ref={overlayRef}
-                className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200"
+                className={cn(
+                    "bg-white rounded-xl shadow-xl w-full overflow-hidden animate-in zoom-in-95 duration-200",
+                    maxWidthClass
+                )}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className={cn(

@@ -19,6 +19,9 @@ import { CATEGORIES } from '@/lib/constants';
 import { User } from '@/contexts/UserContext';
 import { Transaction } from '@/types/transactions';
 import { previewLegacyRecurringMigration, RecurringMigrationPreview, runLegacyRecurringMigration } from '@/lib/recurringMigration';
+import { parseDelimitedCsv, normalizeHeader, toIsoDate, parseAmount, dateAmountSignature } from '@/lib/csvHelpers';
+import { parseBankCsv, isBankCsv, BankRow } from '@/lib/bankCsvImport';
+import { BankImportPreviewModal } from '@/components/modals/BankImportPreviewModal';
 
 type DockItem = {
     icon: typeof Wallet;
@@ -44,128 +47,6 @@ function escapeCsvValue(value: string | number) {
     return text;
 }
 
-function parseCsv(text: string) {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentField = '';
-    let insideQuotes = false;
-
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-
-        if (insideQuotes) {
-            if (ch === '"') {
-                if (text[i + 1] === '"') {
-                    currentField += '"';
-                    i++;
-                } else {
-                    insideQuotes = false;
-                }
-            } else {
-                currentField += ch;
-            }
-            continue;
-        }
-
-        if (ch === '"') {
-            insideQuotes = true;
-            continue;
-        }
-
-        if (ch === ',') {
-            currentRow.push(currentField.trim());
-            currentField = '';
-            continue;
-        }
-
-        if (ch === '\n') {
-            currentRow.push(currentField.trim());
-            rows.push(currentRow);
-            currentRow = [];
-            currentField = '';
-            continue;
-        }
-
-        if (ch !== '\r') {
-            currentField += ch;
-        }
-    }
-
-    if (currentField.length > 0 || currentRow.length > 0) {
-        currentRow.push(currentField.trim());
-        rows.push(currentRow);
-    }
-
-    return rows.filter((row) => row.some((cell) => cell.trim().length > 0));
-}
-
-function normalizeHeader(header: string) {
-    return header.toLowerCase().replace(/[\s_\-]/g, '');
-}
-
-function toIsoDate(dateValue: string) {
-    const value = dateValue.trim();
-    if (!value) return null;
-
-    const yyyyMmDdMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-    if (yyyyMmDdMatch) {
-        const year = Number(yyyyMmDdMatch[1]);
-        const month = Number(yyyyMmDdMatch[2]);
-        const day = Number(yyyyMmDdMatch[3]);
-        const candidate = new Date(year, month - 1, day);
-        if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return null;
-        return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    }
-
-    const slashMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (slashMatch) {
-        const month = Number(slashMatch[1]);
-        const day = Number(slashMatch[2]);
-        const year = Number(slashMatch[3]);
-        const candidate = new Date(year, month - 1, day);
-        if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return null;
-        return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    }
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    const year = parsed.getFullYear();
-    const month = parsed.getMonth() + 1;
-    const day = parsed.getDate();
-    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-}
-
-function parseAmount(rawAmount: string) {
-    const value = rawAmount.trim();
-    if (!value) return null;
-
-    const isNegative = /^\s*-/.test(value) || /^\s*\(.*\)\s*$/.test(value);
-    const isPositive = /^\s*\+/.test(value);
-
-    let numeric = value
-        .replace(/[€$£₪]/g, '')
-        .replace(/[()]/g, '')
-        .replace(/\s+/g, '');
-
-    const dotCount = (numeric.match(/\./g) || []).length;
-    const commaCount = (numeric.match(/,/g) || []).length;
-    if (commaCount > 0 && dotCount === 0) {
-        const decimalCommaMatch = numeric.match(/^-?\d+,\d{1,2}$/);
-        numeric = decimalCommaMatch ? numeric.replace(',', '.') : numeric.replace(/,/g, '');
-    } else {
-        numeric = numeric.replace(/,/g, '');
-    }
-
-    const parsed = Number.parseFloat(numeric);
-    if (Number.isNaN(parsed)) return null;
-
-    return {
-        amount: Math.abs(parsed),
-        hasSign: isNegative || isPositive,
-        typeFromSign: isNegative ? 'expense' as const : isPositive ? 'income' as const : null,
-    };
-}
-
 function getCreatedAtSeconds(value: unknown): number {
     if (value && typeof value === 'object' && 'seconds' in value) {
         const seconds = (value as { seconds?: unknown }).seconds;
@@ -186,10 +67,6 @@ function parseOwner(ownerRaw: string) {
         return { ownerType: 'individual' as const, ownerId: 'sivan' };
     }
     return { ownerType: 'individual' as const, ownerId: 'individual' };
-}
-
-function dateAmountSignature(date: string, amount: number) {
-    return `${date}::${Math.round(amount * 100)}`;
 }
 
 function ProfileMenu({ currentUser, onLogout }: { currentUser: User; onLogout: () => Promise<void> }) {
@@ -248,6 +125,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const [importFile, setImportFile] = useState<File | null>(null);
     const [skipDuplicateImports, setSkipDuplicateImports] = useState(true);
     const [importInputKey, setImportInputKey] = useState(0);
+    const [bankImportFile, setBankImportFile] = useState<File | null>(null);
+    const [bankImportPreview, setBankImportPreview] = useState<{ rows: BankRow[]; existingSignatures: Set<string>; skippedInvalid: number } | null>(null);
+    const [bankImporting, setBankImporting] = useState(false);
+    const [bankImportInputKey, setBankImportInputKey] = useState(0);
+    const [openingBankPreview, setOpeningBankPreview] = useState(false);
     const [deleteMode, setDeleteMode] = useState<DeleteMode>('all');
     const [selectedDeleteMonth, setSelectedDeleteMonth] = useState('');
     const [deleteRangeStart, setDeleteRangeStart] = useState('');
@@ -643,7 +525,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         try {
             const csvText = await importFile.text();
-            const rows = parseCsv(csvText);
+            const rows = parseDelimitedCsv(csvText, ',');
             if (rows.length < 2) {
                 setToast({ variant: 'error', message: 'CSV is empty or missing data rows' });
                 return;
@@ -799,6 +681,120 @@ export function Shell({ children }: { children: React.ReactNode }) {
             setToast({ variant: 'error', message: 'Failed to import CSV file' });
         } finally {
             setImporting(false);
+        }
+    };
+
+    const handleOpenBankPreview = async () => {
+        if (!currentUser) {
+            setToast({ variant: 'error', message: 'Please sign in first' });
+            return;
+        }
+        if (!bankImportFile) {
+            setToast({ variant: 'error', message: 'Please choose a bank CSV file first' });
+            return;
+        }
+
+        setOpeningBankPreview(true);
+        try {
+            const text = await bankImportFile.text();
+            if (!isBankCsv(text)) {
+                setToast({
+                    variant: 'error',
+                    message: "This doesn't look like a bank export. Use the regular Import button for Monopoluri CSVs.",
+                });
+                return;
+            }
+
+            const { rows, skippedInvalid } = parseBankCsv(text);
+            if (rows.length === 0) {
+                setToast({ variant: 'error', message: 'No rows found in bank CSV' });
+                return;
+            }
+
+            const existingSignatures = new Set<string>();
+            transactions.forEach((tx) => {
+                if (!tx.date || typeof tx.amount !== 'number') return;
+                existingSignatures.add(dateAmountSignature(tx.date, tx.amount));
+            });
+
+            setBankImportPreview({ rows, existingSignatures, skippedInvalid });
+        } catch (error) {
+            console.error(error);
+            setToast({ variant: 'error', message: 'Failed to read bank CSV file' });
+        } finally {
+            setOpeningBankPreview(false);
+        }
+    };
+
+    const handleConfirmBankImport = async (rowsToImport: BankRow[]) => {
+        if (!currentUser) {
+            setToast({ variant: 'error', message: 'Please sign in first' });
+            return;
+        }
+        if (rowsToImport.length === 0) {
+            setToast({ variant: 'error', message: 'No rows selected to import' });
+            return;
+        }
+
+        setBankImporting(true);
+        try {
+            const { db } = await import('@/lib/firebase');
+            const { collection, doc, writeBatch, serverTimestamp } = await import('firebase/firestore');
+
+            let batch = writeBatch(db);
+            let pendingOps = 0;
+            let importedCount = 0;
+
+            for (const row of rowsToImport) {
+                const category = CATEGORIES.find((c) => c.id === row.categoryId);
+                if (!category) continue;
+
+                const txRef = doc(collection(db, 'transactions'));
+                batch.set(txRef, {
+                    name: row.name,
+                    amount: row.amount,
+                    type: row.type,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    ownerId: 'shared',
+                    ownerType: 'shared',
+                    date: row.date,
+                    frequency: 'one-time',
+                    hasReceipt: false,
+                    createdAt: serverTimestamp(),
+                });
+
+                importedCount++;
+                pendingOps++;
+
+                if (pendingOps >= 450) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    pendingOps = 0;
+                }
+            }
+
+            if (pendingOps > 0) {
+                await batch.commit();
+            }
+
+            if (importedCount === 0) {
+                setToast({ variant: 'error', message: 'No rows imported' });
+                return;
+            }
+
+            setToast({
+                variant: 'success',
+                message: `Imported ${importedCount} row${importedCount === 1 ? '' : 's'} from bank CSV.`,
+            });
+            setBankImportPreview(null);
+            setBankImportFile(null);
+            setBankImportInputKey((prev) => prev + 1);
+        } catch (error) {
+            console.error(error);
+            setToast({ variant: 'error', message: 'Failed to import bank CSV' });
+        } finally {
+            setBankImporting(false);
         }
     };
 
@@ -1109,6 +1105,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
                     <div className="border-t pt-4 space-y-3">
                         <div>
+                            <h4 className="text-sm font-semibold text-gray-900">Import from bank</h4>
+                            <p className="text-xs text-gray-500">
+                                Upload the CSV straight from your bank app — categories and type are inferred automatically. All rows import as <strong>Shared</strong>.
+                            </p>
+                        </div>
+                        <input
+                            key={bankImportInputKey}
+                            type="file"
+                            accept=".csv,text/csv"
+                            onChange={(e) => setBankImportFile(e.target.files?.[0] ?? null)}
+                            className="file-input file-input-bordered w-full"
+                        />
+                        <Button
+                            variant="secondary"
+                            className="w-full"
+                            onClick={handleOpenBankPreview}
+                            disabled={openingBankPreview || !bankImportFile}
+                        >
+                            <Upload size={16} className="mr-2" />
+                            {openingBankPreview ? 'Parsing…' : 'Review bank CSV'}
+                        </Button>
+                    </div>
+
+                    <div className="border-t pt-4 space-y-3">
+                        <div>
                             <h4 className="text-sm font-semibold text-gray-900">Recurring Migration</h4>
                             <p className="text-xs text-gray-500">
                                 Convert legacy frequency-based recurring transactions into the new recurring manager format.
@@ -1321,6 +1342,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     router.push('/goals');
                 }}
             />
+            {bankImportPreview && (
+                <BankImportPreviewModal
+                    isOpen={true}
+                    onClose={() => {
+                        if (!bankImporting) setBankImportPreview(null);
+                    }}
+                    rows={bankImportPreview.rows}
+                    existingSignatures={bankImportPreview.existingSignatures}
+                    skippedInvalid={bankImportPreview.skippedInvalid}
+                    importing={bankImporting}
+                    onConfirm={handleConfirmBankImport}
+                />
+            )}
         </>
     );
 }
