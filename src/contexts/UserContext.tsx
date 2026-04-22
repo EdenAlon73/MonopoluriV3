@@ -23,17 +23,32 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+// Dev-only auth bypass. Active only when NEXT_PUBLIC_DEV_AUTH_BYPASS=1 and NODE_ENV is not production.
+// Lets us preview the app without hitting Google sign-in. Firestore writes will still fail without real auth.
+const DEV_AUTH_BYPASS =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1';
+
+const DEV_MOCK_USER: User = {
+    id: 'dev-bypass-user',
+    name: 'Dev User',
+    email: 'dev@local',
+    photoURL: null,
+    color: '#0073ea',
+};
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState<User | null>(DEV_AUTH_BYPASS ? DEV_MOCK_USER : null);
+    const [loading, setLoading] = useState(!DEV_AUTH_BYPASS);
 
     useEffect(() => {
+        if (DEV_AUTH_BYPASS) {
+            console.warn('[UserContext] DEV_AUTH_BYPASS is ON — using a mock user. Do not ship with this flag enabled.');
+            return;
+        }
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             if (firebaseUser) {
-                // Simple heuristic to assign "color" based on email or name, or just random/persistent
-                // For now, let's just default to "eden" (blue) style for everyone, or check email
                 const isSivan = firebaseUser.email?.includes('sivan') || false;
-
                 setCurrentUser({
                     id: firebaseUser.uid,
                     name: firebaseUser.displayName || 'User',
@@ -50,6 +65,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const login = async () => {
+        if (DEV_AUTH_BYPASS) {
+            setCurrentUser(DEV_MOCK_USER);
+            return;
+        }
         try {
             await signInWithPopup(auth, googleProvider);
         } catch (error) {
@@ -58,6 +77,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
 
     const logout = async () => {
+        if (DEV_AUTH_BYPASS) {
+            setCurrentUser(null);
+            return;
+        }
         try {
             await signOut(auth);
         } catch (error) {
