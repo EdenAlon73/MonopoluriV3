@@ -18,6 +18,7 @@ import { db } from '@/lib/firebase';
 import { Transaction } from '@/types/transactions';
 import { useUser } from '@/contexts/UserContext';
 import { isTransactionOnOrAfterCutoff, normalizeTransactionCategoryFields, TRANSACTION_CUTOFF_DATE } from '@/lib/transactionHelpers';
+import { DEV_AUTH_BYPASS, makeMockId, mockTransactionsStore } from '@/lib/devMock';
 
 const COLLECTION_NAME = 'transactions';
 const RECURRING_EXCEPTIONS_COLLECTION = 'recurringExceptions';
@@ -130,8 +131,10 @@ async function commitDeletes(ids: string[]) {
 }
 
 export function useTransactions() {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [transactions, setTransactions] = useState<Transaction[]>(() =>
+        DEV_AUTH_BYPASS ? mockTransactionsStore.get() : [],
+    );
+    const [loading, setLoading] = useState(!DEV_AUTH_BYPASS);
     const { currentUser, loading: userLoading } = useUser();
     const maintenanceDoneForUser = useRef<string | null>(null);
 
@@ -148,6 +151,11 @@ export function useTransactions() {
     }, []);
 
     useEffect(() => {
+        if (DEV_AUTH_BYPASS) {
+            return mockTransactionsStore.subscribe(() => {
+                setTransactions([...mockTransactionsStore.get()]);
+            });
+        }
         if (userLoading) return;
 
         if (!currentUser) {
@@ -174,6 +182,7 @@ export function useTransactions() {
     }, [currentUser, userLoading]);
 
     useEffect(() => {
+        if (DEV_AUTH_BYPASS) return;
         if (userLoading) return;
         if (!currentUser) {
             maintenanceDoneForUser.current = null;
@@ -194,7 +203,6 @@ export function useTransactions() {
     }, [currentUser, userLoading, pruneLegacyTransactions]);
 
     const addTransaction = async (tx: Omit<Transaction, 'id'>) => {
-        if (!currentUser) throw new Error('Must be logged in');
         const normalizedTx = normalizeTransactionInput({
             ...tx,
             frequency: 'one-time',
@@ -203,6 +211,13 @@ export function useTransactions() {
             parentTransactionId: undefined,
         });
 
+        if (DEV_AUTH_BYPASS) {
+            const newTx: Transaction = { ...normalizedTx, id: makeMockId('tx') } as Transaction;
+            mockTransactionsStore.update((list) => [newTx, ...list]);
+            return;
+        }
+
+        if (!currentUser) throw new Error('Must be logged in');
         await addDoc(collection(db, COLLECTION_NAME), {
             ...toWritableTransaction(normalizedTx),
             createdAt: serverTimestamp(),
@@ -210,6 +225,10 @@ export function useTransactions() {
     };
 
     const deleteAllTransactions = async () => {
+        if (DEV_AUTH_BYPASS) {
+            mockTransactionsStore.set([]);
+            return;
+        }
         if (!currentUser) throw new Error('Must be logged in');
 
         const snapshot = await getDocs(query(collection(db, COLLECTION_NAME)));
@@ -217,6 +236,28 @@ export function useTransactions() {
     };
 
     const updateTransaction = async (id: string, tx: Partial<Omit<Transaction, 'id'>>) => {
+        if (DEV_AUTH_BYPASS) {
+            mockTransactionsStore.update((list) =>
+                list.map((existing) => {
+                    if (existing.id !== id) return existing;
+                    if (existing.recurrenceId) {
+                        throw new Error('Recurring transactions can only be edited from the recurring manager.');
+                    }
+                    const merged = normalizeTransactionInput({
+                        ...stripTransactionId(existing),
+                        ...tx,
+                        type: tx.type ?? existing.type,
+                        frequency: 'one-time',
+                        recurrenceId: undefined,
+                        occurrenceDate: undefined,
+                        parentTransactionId: undefined,
+                    });
+                    return { ...merged, id } as Transaction;
+                }),
+            );
+            return;
+        }
+
         if (!currentUser) throw new Error('Must be logged in');
         const txRef = doc(db, COLLECTION_NAME, id);
         const existingSnapshot = await getDoc(txRef);
@@ -244,6 +285,11 @@ export function useTransactions() {
     };
 
     const deleteTransaction = async (id: string) => {
+        if (DEV_AUTH_BYPASS) {
+            mockTransactionsStore.update((list) => list.filter((existing) => existing.id !== id));
+            return;
+        }
+
         if (!currentUser) throw new Error('Must be logged in');
         const txRef = doc(db, COLLECTION_NAME, id);
         const existingSnapshot = await getDoc(txRef);
