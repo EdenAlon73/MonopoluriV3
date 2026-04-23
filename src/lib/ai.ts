@@ -17,7 +17,7 @@ export async function chatWithAI(messages: { role: 'user' | 'assistant' | 'syste
                 "X-Title": "MonopoluriV3",
             },
             body: JSON.stringify({
-                "model": "z-ai/glm-4.5-air:free",
+                "model": "google/gemma-4-26b-a4b-it:free",
                 "messages": messages,
             })
         });
