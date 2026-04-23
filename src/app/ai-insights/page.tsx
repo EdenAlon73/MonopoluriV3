@@ -70,7 +70,7 @@ Use this data to answer the user's questions about their finances. Be specific a
                     "X-Title": "MonopoluriV3",
                 },
                 body: JSON.stringify({
-                    "model": "google/gemma-4-26b-a4b-it:free",
+                    "model": "liquid/lfm-2.5-1.2b-thinking:free",
                     "messages": [
                         { role: 'system', content: financialContext },
                         ...newMessages
