@@ -6,32 +6,15 @@ import {
     ArrowLeft,
     ArrowRight,
     ArrowUpRight,
-    Banknote,
-    Briefcase,
     CalendarDays,
-    Car,
     Check,
-    Clapperboard,
-    Gift,
-    HeartPulse,
-    Home,
-    MoreHorizontal,
-    Package,
-    Plane,
-    Repeat,
-    ShieldCheck,
-    ShoppingBag,
-    ShoppingCart,
-    Sparkles,
-    Undo2,
-    UtensilsCrossed,
     X,
-    Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "./Button";
 import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/lib/constants";
+import { getCategoryIcon } from "@/lib/categoryIcons";
 import { Transaction } from "@/types/transactions";
 import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
 
@@ -67,27 +50,6 @@ const OWNER_OPTIONS: Array<{ value: FormState["owner"]; color: string }> = [
     { value: "Eden", color: "#7e5bef" },
     { value: "Sivan", color: "#ec4899" },
 ];
-
-const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-    salary: Banknote,
-    freelance: Briefcase,
-    gift: Gift,
-    refunds: Undo2,
-    other: MoreHorizontal,
-    housing: Home,
-    food: UtensilsCrossed,
-    groceries: ShoppingCart,
-    insurance: ShieldCheck,
-    subscriptions: Repeat,
-    transport: Car,
-    travel: Plane,
-    shopping: ShoppingBag,
-    utilities: Zap,
-    entertainment: Clapperboard,
-    health: HeartPulse,
-    "personal-care": Sparkles,
-    misc: Package,
-};
 
 type MultiStepTransactionFormProps = {
     onSubmit: (tx: Omit<Transaction, "id">, id?: string) => Promise<void>;
@@ -236,7 +198,7 @@ export function MultiStepTransactionForm({
     };
 
     const selectedCategory = resolveCategoryForTransaction({ type: form.type, categoryId: form.categoryId });
-    const SelectedCategoryIcon = CATEGORY_ICONS[selectedCategory.id] ?? Package;
+    const SelectedCategoryIcon = getCategoryIcon(selectedCategory.id);
     const ownerColor = OWNER_OPTIONS.find((o) => o.value === form.owner)?.color ?? "#0073ea";
 
     return (
@@ -513,7 +475,7 @@ function CategoryGrid({
     return (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {categories.map((cat) => {
-                const Icon = CATEGORY_ICONS[cat.id] ?? Package;
+                const Icon = getCategoryIcon(cat.id);
                 const selected = value === cat.id;
                 return (
                     <button

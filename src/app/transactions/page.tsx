@@ -8,6 +8,8 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import { Transaction } from "@/types/transactions";
 import { EditTransactionModal } from "@/components/modals/EditTransactionModal";
 import { resolveCategoryForTransaction } from "@/lib/transactionHelpers";
+import { getCategoryColor, getCategoryIcon } from "@/lib/categoryIcons";
+import { TransactionCardMobile } from "@/components/transactions/TransactionCardMobile";
 import { useRouter } from "next/navigation";
 
 type SortField = 'date' | 'name' | 'categoryName' | 'ownerType' | 'amount';
@@ -43,11 +45,24 @@ export default function TransactionsPage() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-    const getCategoryLabel = (tx: Transaction) => resolveCategoryForTransaction({
+    const getResolvedCategory = (tx: Transaction) => resolveCategoryForTransaction({
         type: tx.type,
         categoryId: tx.categoryId,
         categoryName: tx.categoryName,
-    }).name;
+    });
+    const getCategoryLabel = (tx: Transaction) => getResolvedCategory(tx).name;
+
+    const handleDelete = (tx: Transaction) => {
+        const confirmDelete = window.confirm(
+            tx.recurrenceId
+                ? "Delete this recurring occurrence for this month only?"
+                : "Delete this transaction?",
+        );
+        if (confirmDelete) deleteTransaction(tx.id);
+    };
+
+    const handleEditInManager = (recurrenceId: string) =>
+        router.push(`/recurring?edit=${recurrenceId}`);
 
     // Filter transactions up to current date only (for balance calculation)
     const currentDateStr = today.toISOString().split('T')[0];
@@ -102,6 +117,84 @@ export default function TransactionsPage() {
             setSortField(field);
             setSortDirection('asc');
         }
+    };
+
+    const groupByDate = sortField === 'date';
+
+    const groupedTransactions = useMemo(() => {
+        if (!groupByDate) return [] as Array<{ date: string; items: Transaction[] }>;
+        const groups = new Map<string, Transaction[]>();
+        for (const tx of sortedTransactions) {
+            const key = tx.date;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(tx);
+        }
+        return Array.from(groups.entries()).map(([date, items]) => ({ date, items }));
+    }, [groupByDate, sortedTransactions]);
+
+    const renderDesktopRow = (tx: Transaction) => {
+        const resolved = getResolvedCategory(tx);
+        const Icon = getCategoryIcon(resolved.id);
+        const color = getCategoryColor(resolved.id);
+        return (
+            <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                <td className="p-3 text-gray-600 whitespace-nowrap">{tx.date}</td>
+                <td className="p-3 font-medium break-words">{tx.name}</td>
+                <td className="p-3">
+                    <span
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide"
+                        style={{ backgroundColor: `${color}1A`, color }}
+                    >
+                        <Icon className="w-3.5 h-3.5" style={{ color }} />
+                        {resolved.name}
+                    </span>
+                </td>
+                <td className="p-3">
+                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                        {tx.ownerType === 'shared' ? 'Shared' : 'Individual'}
+                    </span>
+                </td>
+                <td className={cn("p-3 text-right font-medium text-sm sm:text-base whitespace-nowrap", tx.type === 'income' ? "text-green-600" : "text-gray-900")}>
+                    {tx.type === 'income' ? '+' : '-'}€{tx.amount.toLocaleString()}
+                </td>
+                <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                    {tx.recurrenceId ? (
+                        <button
+                            className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
+                            onClick={() => handleEditInManager(tx.recurrenceId!)}
+                        >
+                            Edit in Manager
+                        </button>
+                    ) : (
+                        <button
+                            className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
+                            onClick={() => setEditingTx(tx)}
+                        >
+                            Edit
+                        </button>
+                    )}
+                    <button
+                        className="text-xs px-2 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(tx)}
+                    >
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        );
+    };
+
+    const formatDateHeader = (iso: string) => {
+        const d = new Date(iso + 'T00:00:00');
+        if (Number.isNaN(d.getTime())) return iso;
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86400000);
+        const dateLabel = d.toLocaleDateString('en-IE', { weekday: 'short', month: 'short', day: 'numeric' });
+        if (diffDays === 0) return `TODAY, ${dateLabel.toUpperCase()}`;
+        if (diffDays === 1) return `YESTERDAY, ${dateLabel.toUpperCase()}`;
+        return dateLabel.toUpperCase();
     };
     
     // Generate month options (last 12 months + next 12 months)
@@ -164,7 +257,7 @@ export default function TransactionsPage() {
                 </Card>
             </div>
 
-            <Card>
+            <Card className="hidden md:block">
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                     <table className="w-full min-w-[780px] text-left text-sm">
@@ -201,55 +294,87 @@ export default function TransactionsPage() {
                         <tbody className="divide-y divide-gray-100">
                             {sortedTransactions.length === 0 ? (
                                 <tr><td colSpan={6} className="p-8 text-center text-gray-400">No transactions this month. Add one!</td></tr>
-                            ) : sortedTransactions.map(tx => (
-                                <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="p-3 text-gray-600 whitespace-nowrap">{tx.date}</td>
-                                    <td className="p-3 font-medium">{tx.name}</td>
-                                    <td className="p-3"><span className="px-2 py-1 bg-gray-100 rounded-md text-xs">{getCategoryLabel(tx)}</span></td>
-                                    <td className="p-3">
-                                        {tx.ownerType === 'shared' ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Shared</span> :
-                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Individual</span>}
-                                    </td>
-                                    <td className={cn("p-3 text-right font-medium text-sm sm:text-base whitespace-nowrap", tx.type === 'income' ? "text-green-600" : "text-gray-900")}>
-                                        {tx.type === 'income' ? '+' : '-'}€{tx.amount.toLocaleString()}
-                                    </td>
-                                    <td className="p-3 text-right space-x-2 whitespace-nowrap">
-                                        {tx.recurrenceId ? (
-                                            <button
-                                                className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
-                                                onClick={() => router.push(`/recurring?edit=${tx.recurrenceId}`)}
-                                            >
-                                                Edit in Manager
-                                            </button>
-                                        ) : (
-                                            <button
-                                                className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-100"
-                                                onClick={() => setEditingTx(tx)}
-                                            >
-                                                Edit
-                                            </button>
-                                        )}
-                                        <button
-                                            className="text-xs px-2 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-                                            onClick={() => {
-                                                const confirmDelete = window.confirm(
-                                                    tx.recurrenceId
-                                                        ? "Delete this recurring occurrence for this month only?"
-                                                        : "Delete this transaction?",
-                                                );
-                                                if (confirmDelete) deleteTransaction(tx.id);
-                                            }}
-                                        >
-                                            Delete
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            ) : groupByDate ? (
+                                groupedTransactions.flatMap((group) => [
+                                    <tr key={`h-${group.date}`} className="bg-gray-50">
+                                        <td colSpan={6} className="px-4 py-2 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+                                            {formatDateHeader(group.date)}
+                                        </td>
+                                    </tr>,
+                                    ...group.items.map(tx => renderDesktopRow(tx)),
+                                ])
+                            ) : (
+                                sortedTransactions.map(tx => renderDesktopRow(tx))
+                            )}
                         </tbody>
                     </table>
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Mobile view: sort control + card list */}
+            <div className="md:hidden space-y-3">
+                <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Sort by:</label>
+                    <select
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={sortField}
+                        onChange={(e) => setSortField(e.target.value as SortField)}
+                    >
+                        <option value="date">Date</option>
+                        <option value="name">Name</option>
+                        <option value="categoryName">Category</option>
+                        <option value="ownerType">Owner</option>
+                        <option value="amount">Amount</option>
+                    </select>
+                    <button
+                        type="button"
+                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+                        onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                        aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                    >
+                        {sortDirection === 'asc' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                </div>
+
+                {sortedTransactions.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 bg-white border border-gray-200 rounded-xl">
+                        No transactions this month. Add one!
+                    </div>
+                ) : groupByDate ? (
+                    <div className="space-y-5">
+                        {groupedTransactions.map((group) => (
+                            <div key={group.date} className="space-y-1.5">
+                                <h3 className="text-xs font-semibold tracking-wider text-gray-500 uppercase px-1">
+                                    {formatDateHeader(group.date)}
+                                </h3>
+                                {group.items.map((tx) => (
+                                    <TransactionCardMobile
+                                        key={tx.id}
+                                        transaction={tx}
+                                        onEdit={setEditingTx}
+                                        onDelete={handleDelete}
+                                        onEditInManager={handleEditInManager}
+                                        hideDate
+                                    />
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {sortedTransactions.map((tx) => (
+                            <TransactionCardMobile
+                                key={tx.id}
+                                transaction={tx}
+                                onEdit={setEditingTx}
+                                onDelete={handleDelete}
+                                onEditInManager={handleEditInManager}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
 
             <EditTransactionModal
                 isOpen={!!editingTx}
