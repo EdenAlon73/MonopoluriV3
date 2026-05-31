@@ -86,12 +86,22 @@ Invalid dates are skipped.
 
 ## Duplicate Handling
 
-If `Skip existing entries (same date and amount)` is enabled in the UI (default on), rows are skipped when an existing transaction already has the same:
+The regular Monopoluri CSV import can skip existing entries when `Skip existing entries (same date and amount)` is enabled.
 
-- `Date`
-- `Amount` (normalized to cents)
+The `Import from bank` flow uses a review step instead of silently skipping rows. A bank row is grouped with existing app transactions when all of these match:
 
-Owner and category are ignored for duplicate matching.
+- Same transaction type (`income` or `expense`)
+- Same `Amount` (normalized to cents)
+- Same date, or a date within 3 days
+
+Same-date matches are shown as `Exact match`. Same-amount matches within 3 days are shown as `Possible match`.
+
+Owner, category, and name are ignored for bank duplicate matching because manually entered transactions may use different labels than bank exports.
+
+Every matched bank row must be resolved before import:
+
+- `Import anyway` keeps both entries.
+- `Skip bank row` keeps the existing app entry and does not import the bank row.
 
 ## Minimal Example CSV
 

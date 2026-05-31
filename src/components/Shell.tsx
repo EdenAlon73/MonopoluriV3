@@ -125,7 +125,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const [skipDuplicateImports, setSkipDuplicateImports] = useState(true);
     const [importInputKey, setImportInputKey] = useState(0);
     const [bankImportFile, setBankImportFile] = useState<File | null>(null);
-    const [bankImportPreview, setBankImportPreview] = useState<{ rows: BankRow[]; existingSignatures: Set<string>; skippedInvalid: number } | null>(null);
+    const [bankImportPreview, setBankImportPreview] = useState<{ rows: BankRow[]; existingTransactions: Transaction[]; skippedInvalid: number } | null>(null);
     const [bankImporting, setBankImporting] = useState(false);
     const [bankImportInputKey, setBankImportInputKey] = useState(0);
     const [openingBankPreview, setOpeningBankPreview] = useState(false);
@@ -705,13 +705,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            const existingSignatures = new Set<string>();
-            transactions.forEach((tx) => {
-                if (!tx.date || typeof tx.amount !== 'number') return;
-                existingSignatures.add(dateAmountSignature(tx.date, tx.amount));
-            });
-
-            setBankImportPreview({ rows, existingSignatures, skippedInvalid });
+            setBankImportPreview({ rows, existingTransactions: transactions, skippedInvalid });
         } catch (error) {
             console.error(error);
             setToast({ variant: 'error', message: 'Failed to read bank CSV file' });
@@ -1312,7 +1306,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         if (!bankImporting) setBankImportPreview(null);
                     }}
                     rows={bankImportPreview.rows}
-                    existingSignatures={bankImportPreview.existingSignatures}
+                    existingTransactions={bankImportPreview.existingTransactions}
                     skippedInvalid={bankImportPreview.skippedInvalid}
                     importing={bankImporting}
                     onConfirm={handleConfirmBankImport}

@@ -1,5 +1,6 @@
 import { parseDelimitedCsv, normalizeHeader, toIsoDate, parseAmount } from '@/lib/csvHelpers';
 import { CATEGORIES } from '@/lib/constants';
+import { Transaction } from '@/types/transactions';
 
 export const BANK_HEADERS = {
     entryDate: 'entrydate',
@@ -28,10 +29,36 @@ export type ParseBankCsvResult = {
     skippedInvalid: number;
 };
 
+export type BankImportMatchKind = 'exact' | 'possible';
+
+export type BankImportMatch = {
+    id: string;
+    name: string;
+    date: string;
+    amount: number;
+    type: 'income' | 'expense';
+    categoryId?: string;
+    categoryName?: string;
+    ownerId: string | null;
+    ownerType: 'individual' | 'shared';
+    kind: BankImportMatchKind;
+    dayDelta: number;
+};
+
+export type BankImportReviewRow = BankRow & {
+    id: string;
+    matches: BankImportMatch[];
+    matchKind: BankImportMatchKind | null;
+};
+
+export type BankImportResolution = 'import' | 'skip' | null;
+
 type KeywordRule = {
     categoryId: string;
     keywords: string[];
 };
+
+const POSSIBLE_MATCH_WINDOW_DAYS = 3;
 
 const EXPENSE_RULES: KeywordRule[] = [
     { categoryId: 'groceries', keywords: ['k-market', 'k-citymarket', 'k-supermarket', 'lidl', 'tokmanni', 'ruohonjuuri', 'happy sunshine', 'fida', 'prisma'] },
@@ -155,4 +182,77 @@ export function parseBankCsv(text: string): ParseBankCsvResult {
 
 export function categoryNameFor(categoryId: string): string {
     return CATEGORIES.find((c) => c.id === categoryId)?.name ?? categoryId;
+}
+
+function amountCents(amount: number): number {
+    return Math.round(amount * 100);
+}
+
+function isoDateToUtcTime(date: string): number | null {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!year || !month || !day) return null;
+
+    return Date.UTC(year, month - 1, day);
+}
+
+function dayDistance(a: string, b: string): number | null {
+    const aTime = isoDateToUtcTime(a);
+    const bTime = isoDateToUtcTime(b);
+    if (aTime === null || bTime === null) return null;
+    return Math.abs(Math.round((aTime - bTime) / 86_400_000));
+}
+
+export function buildBankImportReviewRows(
+    rows: BankRow[],
+    existingTransactions: Transaction[],
+): BankImportReviewRow[] {
+    return rows.map((row, idx) => {
+        const rowCents = amountCents(row.amount);
+        const matches = existingTransactions
+            .map<BankImportMatch | null>((tx) => {
+                if (!tx.date || tx.type !== row.type) return null;
+                if (amountCents(tx.amount) !== rowCents) return null;
+
+                const delta = dayDistance(row.date, tx.date);
+                if (delta === null || delta > POSSIBLE_MATCH_WINDOW_DAYS) return null;
+
+                return {
+                    id: tx.id,
+                    name: tx.name,
+                    date: tx.date,
+                    amount: tx.amount,
+                    type: tx.type,
+                    categoryId: tx.categoryId,
+                    categoryName: tx.categoryName,
+                    ownerId: tx.ownerId,
+                    ownerType: tx.ownerType,
+                    kind: delta === 0 ? 'exact' : 'possible',
+                    dayDelta: delta,
+                };
+            })
+            .filter((match): match is BankImportMatch => Boolean(match))
+            .sort((a, b) => {
+                if (a.kind !== b.kind) return a.kind === 'exact' ? -1 : 1;
+                if (a.dayDelta !== b.dayDelta) return a.dayDelta - b.dayDelta;
+                return b.date.localeCompare(a.date);
+            });
+
+        const matchKind = matches.some((match) => match.kind === 'exact')
+            ? 'exact'
+            : matches.length > 0
+                ? 'possible'
+                : null;
+
+        return {
+            ...row,
+            id: `${idx}-${row.date}-${row.type}-${rowCents}`,
+            matches,
+            matchKind,
+        };
+    });
 }
